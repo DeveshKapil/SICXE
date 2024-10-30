@@ -4,6 +4,7 @@
 #include<iomanip>
 #include<fstream>
 #include<sstream>
+#include<queue>
 
 using namespace std;
 
@@ -26,9 +27,14 @@ void seperate(string &line , string &label , string &opcode , string &operand)
     ss >> opcode >> operand;
 }
 
-void print(ofstream &ofile , int &locctr , int &start , string &objCode , int &count)
+void print(ofstream &ofile , int &locctr , int &start , string &objCode , int &count , queue<string> &qu)
 {
-    ofile << "T" << intToHex(start , 6) << " " << intToHex(count , 2) << " " << objCode << endl;
+    ofile << "T" << intToHex(start , 6) << " " << intToHex(count , 2) << " " << objCode << endl ;
+    while(!qu.empty())
+    {
+        ofile << "M " << qu.front() << " 05" << endl;
+        qu.pop();
+    }
     objCode = "";
     start = locctr;
     count = 0;
@@ -37,7 +43,7 @@ void print(ofstream &ofile , int &locctr , int &start , string &objCode , int &c
 int firstPass(ifstream &ifile , int &pstart , unordered_map<string , string> &optab , unordered_map<string , int> &symtab)
 {
     string line , label , opcode , operand;
-    int locctr = 0;
+    int locctr = 0 , i=1;
 
     while(getline(ifile , line))
     {
@@ -50,8 +56,13 @@ int firstPass(ifstream &ifile , int &pstart , unordered_map<string , string> &op
         else
         {
             if(!label.empty())
-                symtab[label] = locctr;
-
+                if(symtab.find(label) == symtab.end())
+                    symtab[label] = locctr;
+                else
+                {
+                    cerr << "Dulpicate symbol "<< label << " found on line " << i << endl;
+                    return -1;
+                }
             if(opcode == "WORD")
                 locctr += 3;
             else if(opcode == "RESW")
@@ -63,8 +74,15 @@ int firstPass(ifstream &ifile , int &pstart , unordered_map<string , string> &op
             else if(opcode[0] == '+')
                 locctr += 4;
             else
-                locctr += 3;
+                if(optab.find(opcode) != optab.end())
+                    locctr += 3;
+                else
+                {
+                    cerr << "Opcode defined on line " << i <<" " << opcode << " was not found in the optab." << endl;
+                    return -1;
+                }
         }
+        i++;
     }
     return locctr - pstart;
 }
@@ -74,7 +92,8 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
     string line, label, opcode, operand , objCode;
     int locctr = pstart , i=1 , counter = 0;
     int start = locctr;
-
+    int progcounter , base = -1;;
+    queue<string> qu;
 
     getline(ifile , line);
     seperate(line , label , opcode , operand);
@@ -84,7 +103,6 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
 
     while(getline(ifile , line))
     {
-       
         seperate(line, label, opcode, operand);
 
         if(opcode == "END") break;
@@ -92,13 +110,23 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
         {
             if(objCode.length()>0)
             {
-                print(ofile , locctr , start , objCode , counter);
+                print(ofile , locctr , start , objCode , counter , qu);
             }
             if (opcode == "RESW")
             {
                 locctr += 3*stoi(operand);
             }
             locctr += stoi(operand);
+        }
+        else if(opcode == "BASE")
+        {
+            base = symtab[operand];
+            locctr += 3;
+        }
+        else if (opcode == "NOBASE")
+        {
+            base = -1;
+            locctr += 3;
         }
         else
         {
@@ -112,7 +140,7 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
                 int len = temp.length();
                 if(counter+len/2 > 30) 
                 {
-                    print(ofile , locctr , start , objCode , counter);
+                    print(ofile , locctr , start , objCode , counter , qu);
                 }
                 objCode += temp;
                 locctr += len/2;
@@ -124,36 +152,60 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
                 string temp = intToHex(stoi(operand) , 6);
                 if(counter+3 > 30) 
                 {
-                    print(ofile , locctr , start , objCode , counter);
+                    print(ofile , locctr , start , objCode , counter , qu);
                 }
                 objCode += temp;
                 locctr += 3;
                 counter += 3;
             }
 
-            else if(opcode[0] == '+')
-            {
-                string temp = optab[opcode.substr(1)];
-                stringstream ss(operand);
-                string s1 , s2;
-                getline(ss , s1 , ',');
-                getline(ss , s2);
-                if(s2.length() != 0)
-                    temp += 
-                else
-                    temp += intToHex(symtab[operand] , 5);
-
-                locctr += 4;
-                counter += 4;
-            }
-            
             else
             {
-                if(optab.find(opcode)!=optab.end())
+                if(opcode[0] == '+')
                 {
-                    string temp = optab[opcode];
+                    int temp = stoi(optab[opcode.substr(1)]);
                     if(symtab.find(operand)!=symtab.end())
+                    {
                         temp += intToHex(symtab[operand] , 4);
+                        
+                    }
+                    else
+                    {
+                        cerr << "Operand defined on line " << i << " " << operand << " was not found in the symtab." << endl;
+                        ofile.clear();
+                        return -1;
+                    }
+                    if(counter+4 > 30)
+                    {
+                        print(ofile , locctr , start , objCode , counter , qu);
+                    }
+                    objCode += temp;
+                    locctr += 4;
+                    counter += 4;
+                }
+                else{
+                    string temp = optab[opcode];
+                    int disp;
+                    if(operand.length() == 0)
+                    {
+                        temp += intToHex(0 , 4);
+                    }
+                    else if(symtab.find(operand)!=symtab.end())
+                    {
+                        disp = symtab[operand] - locctr - 3;
+                        if((disp < 2048 || disp > 2047) && base == -1) 
+                        {
+                            cerr << "Addresss out of range for format 3 addressing in line " << i << endl;
+                            return -1;
+                        }
+                        else if( )
+                        {
+                            if(disp > 2047)
+                                temp += 
+                        }
+                        temp += intToHex(symtab[operand] , 4);
+                        temp -= 
+                    }
                     else
                     {
                         cerr << "Operand defined on line " << i << " " << operand << " was not found in the symtab." << endl;
@@ -162,17 +214,11 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
                     }
                     if(counter+3 > 30)
                     {
-                        print(ofile , locctr , start , objCode , counter);
+                        print(ofile , locctr , start , objCode , counter , qu);
                     }
                     objCode += temp;
                     locctr += 3;
                     counter += 3;
-                }
-                else
-                {
-                    cerr << "Opcode defined on line " << i <<" " << opcode << " was not found in the optab." << endl;
-                    ofile.clear();
-                    return -1;
                 }
             }
         }
@@ -181,7 +227,7 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
     }
     if(objCode.length()>0)
     {
-        print(ofile , locctr , start , objCode , counter);
+        print(ofile , locctr , start , objCode , counter , qu);
     }
     ofile << "E" << intToHex(pstart , 6) << endl;
     return 0;
@@ -234,16 +280,26 @@ int main()
     }
 
 
-    progLen = firstPass (ifile , progStart , optab , symtab);
+    int val = progLen = firstPass (ifile , progStart , optab , symtab);
 
     ifile.clear();
     ifile.seekg(0);
+    if(val == -1)
+    {
+         ifile.close();
+        ofile.close();
+        optab.clear();
+        symtab.clear();
+        cout << "Assembling terminated\nExiting program\n";
+        return 1;
+    }
 
-    int val = secondPass ( ifile , ofile , progStart ,progLen , optab , symtab );
+    val = secondPass ( ifile , ofile , progStart ,progLen , optab , symtab );
     ifile.close();
     ofile.close();
     optab.clear();
     symtab.clear();
+    registerTab.clear();
    
     if(val == -1)
     {
