@@ -29,6 +29,16 @@ void seperate(string &line , string &label , string &opcode , string &operand)
     else operand = "";
 }
 
+int stoih(string s)
+{
+    int decimalValue;
+    stringstream ss;
+    ss << hex << s;
+    ss >> decimalValue;
+
+    return decimalValue;
+}
+
 void seperateReg(string &line , string &operand1 , string &operand2)
 {
     operand1 = "" , operand2 = "";
@@ -212,12 +222,12 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
                     }
                     else if(operand[0] == '#')
                     {
-                        disp = stoi(operand.substr(2 , operand.length()-3));
-                        temp = intToHex(stoi(temp)|1 , 2)+ "1" + intToHex(disp , 5);
+                        disp = stoi(operand.substr(1));
+                        temp = intToHex(stoih(temp)|1 , 2)+ "1" + intToHex(disp , 5);
                     }
                     else if(symtab.find(operand)!=symtab.end())
                     {
-                        temp = intToHex(stoi(temp)|3 , 2) + "1" +  intToHex(symtab[operand] , 5);
+                        temp = intToHex(stoih(temp)|3 , 2) + "1" +  intToHex(symtab[operand] , 5);
 
                         qu.push("M " + intToHex(locctr+1 , 6));
 
@@ -253,6 +263,7 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
                 }
                 else{  // Format three
                     string temp = optab[opcode];
+                    
                     val = 2;
                     if(operand.length() == 0)
                     {
@@ -262,13 +273,13 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
                     {
                         try
                         {
-                            disp = stoi(operand.substr(2 , operand.length()-3));
-                            temp = intToHex(stoi(temp)|1 , 2)+ "0" + intToHex(disp , 3);
+                            disp = stoi(operand.substr(1));
+                            temp = intToHex(stoih(temp)|1 , 2)+ "0" + intToHex(disp , 3);
                         }
                         catch(exception& e)
                         {
-                            disp = symtab[operand.substr(2 , operand.length()-3)] - locctr - 3;
-                            temp = intToHex(stoi(temp)|1 , 2)+ "2" + intToHex(disp , 3);
+                            disp = symtab[operand.substr(1)] - locctr - 3;
+                            temp = intToHex(stoih(temp)|1 , 2)+ "2" + intToHex(disp , 3);
                         }
                     }
                     else if(symtab.find(operand)!=symtab.end())
@@ -289,7 +300,8 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
                            disp = (!abs(disp))+1;
                            val = 2;
                         }
-                        temp = intToHex(stoi(temp)|3 , 2)+ intToHex(val , 1) + intToHex(disp , 3);
+                        
+                        temp = intToHex(stoih(temp)|3 , 2)+ intToHex(val , 1) + intToHex(disp , 3);
                     }
                     else
                     {
@@ -301,6 +313,7 @@ int secondPass(ifstream &ifile ,ofstream &ofile , int &pstart , int &plen, unord
                     {
                         print(ofile , locctr , start , objCode , counter );
                     }
+                    cout << opcode  << "\t"  << optab[opcode] << "\t" << disp << "\t"  << "\t" << temp << endl;
                     objCode += temp;
                     locctr += 3;
                     counter += 3;
