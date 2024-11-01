@@ -1,0 +1,21 @@
+            COPY    START   1000
+0000            FIRST   STL     RETADR
+0003                    LDB     #LENGTH
+                        BASE    LENGTH
+0006                    LDX     #0
+0009            LOOP    LDA     ZERO
+000C                    COMP    LENGTH
+000F                    JEQ     ENDFIL
+0012                    JSUB    RDREC
+0015                    TIXR    X
+0017                    JLT     LOOP
+001A            ENDFIL  RSUB
+001D            RETADR  RESW    1
+0020            RDREC   LDA     ZERO
+0023                    ADD     LENGTH
+0026                    COMP    LENGTH
+0029                    JEQ     LOOP
+002C                    RSUB
+002F            LENGTH  WORD    4096
+0032            ZERO    WORD    0
+0035                    END     FIRST
